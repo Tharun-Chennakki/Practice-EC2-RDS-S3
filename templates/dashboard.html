@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - User Authentication</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container dashboard-container">
+        <h1 class="dashboard-title">Dashboard</h1>
+
+        <!-- Display flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert {{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Welcome Message -->
+        <div class="welcome-message">
+            Welcome, <span class="user-name">{{ username }}</span>!
+        </div>
+
+        <!-- Dashboard Content -->
+        <div class="dashboard-content">
+            <p>You have successfully logged in to your account.</p>
+            <p>This is your personal dashboard where you can manage your account settings and profile information.</p>
+            <p>Click the logout button below when you're ready to end your session.</p>
+        </div>
+
+        <!-- Logout Button -->
+        <a href="{{ url_for('logout') }}" class="logout-button">Logout</a>
+    </div>
+</body>
+</html>
