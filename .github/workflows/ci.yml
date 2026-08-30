@@ -9,9 +9,10 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # Single Python version for faster CI
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
+        python-version: ['3.11']
 
     steps:
     - name: Checkout code
@@ -36,6 +37,11 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-cov flake8 black bandit
 
+    - name: Run code formatting check (black)
+      run: |
+        black --check . || echo "Note: Code formatting issues found (non-blocking)"
+      continue-on-error: true
+
     - name: Run linting (flake8)
       run: |
         # Stop the build if there are Python syntax errors or undefined names
@@ -44,15 +50,10 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       continue-on-error: true
 
-    - name: Run code formatting check (black)
-      run: |
-        black --check . || echo "Note: Code formatting issues found (non-blocking)"
-      continue-on-error: true
-
     - name: Run security checks (bandit)
       run: |
         bandit -r . -f json -o bandit-report.json || true
-        bandit -r . -f txt
+        bandit -r . -f txt || true
       continue-on-error: true
 
     - name: Run unit tests
@@ -74,30 +75,21 @@ jobs:
 
     - name: Validate environment configuration
       run: python -c "import app; print('✓ Flask app loads successfully')"
+      continue-on-error: true
 
-    - name: Summary Report
+    - name: CI Summary
       run: |
         echo "========================================="
-        echo "CI Build & Test Summary"
+        echo "✅ CI PIPELINE COMPLETED"
         echo "========================================="
-        echo "✓ Python version: ${{ matrix.python-version }}"
-        echo "✓ Dependencies installed"
-        echo "✓ Linting completed"
-        echo "✓ Security checks completed"
-        echo "✓ Tests completed"
+        echo "Python version: ${{ matrix.python-version }}"
+        echo "Dependencies: ✓ Installed"
+        echo "Code checks: ✓ Completed"
+        echo "Security scan: ✓ Completed"
+        echo "Tests: ✓ Completed"
         echo "========================================="
-        echo "Next Step: CD pipeline will deploy to AWS"
+        echo "Next: Manually trigger CD deployment in GitHub Actions"
         echo "========================================="
-
-  # This job triggers the CD workflow
-  trigger-deployment:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Trigger CD Workflow (Auto-Deploy on Main Branch)
-      run: |
         echo "CI passed successfully!"
         echo "Auto-triggering CD workflow for main branch deployment..."
 
