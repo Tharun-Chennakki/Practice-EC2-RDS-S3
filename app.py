@@ -5,10 +5,14 @@ This application provides user registration and login functionality with a MySQL
 
 import os
 import re
+from datetime import datetime
 from dotenv import load_dotenv
 import pymysql
+import boto3
+from botocore.exceptions import ClientError
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from werkzeug.utils import secure_filename
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 
 # Load environment variables from .env file
 load_dotenv()
@@ -16,6 +20,32 @@ load_dotenv()
 # Initialize Flask application
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
+
+# ============================================================================
+# FILE UPLOAD CONFIGURATION
+# ============================================================================
+# Create uploads directory if it doesn't exist
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
+
+# Allowed file extensions
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xlsx', 'xls', 'csv', 'zip', 'rar', 'mp3', 'mp4', 'mov', 'avi'}
+
+def allowed_file(filename):
+    """
+    Check if the file extension is allowed.
+    
+    Args:
+        filename (str): The uploaded filename.
+    
+    Returns:
+        bool: True if file extension is allowed, False otherwise.
+    """
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # ============================================================================
 # DATABASE CONFIGURATION
@@ -310,6 +340,64 @@ def dashboard():
         return redirect(url_for('login'))
     
     return render_template('dashboard.html', username=session.get('username'))
+
+
+# ============================================================================
+# FILE UPLOAD ROUTE (For S3 Integration Later)
+# ============================================================================
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    """
+    Handle file uploads. Currently saves locally.
+    Future: Integration with AWS S3 will be added here.
+    
+    Returns:
+        redirect: Redirects back to dashboard with success/error message.
+    """
+    # Check if user is logged in
+    if 'user_id' not in session:
+        flash('Please login to upload files.', 'error')
+        return redirect(url_for('login'))
+    
+    # Check if file is in the request
+    if 'file' not in request.files:
+        flash('No file selected.', 'error')
+        return redirect(url_for('dashboard') + '?upload=failed')
+    
+    file = request.files['file']
+    
+    # Check if file has a filename
+    if file.filename == '':
+        flash('No file selected.', 'error')
+        return redirect(url_for('dashboard') + '?upload=failed')
+    
+    # Check if file is allowed
+    if not allowed_file(file.filename):
+        flash('File type not allowed. Allowed types: ' + ', '.join(ALLOWED_EXTENSIONS), 'error')
+        return redirect(url_for('dashboard') + '?upload=failed')
+    
+    try:
+        # Secure the filename and save it
+        filename = secure_filename(file.filename)
+        # Add timestamp to filename to make it unique
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
+        unique_filename = timestamp + filename
+        
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        file.save(filepath)
+        
+        print(f"[DEBUG] File uploaded successfully: {unique_filename}")
+        print(f"[DEBUG] File size: {os.path.getsize(filepath)} bytes")
+        print(f"[DEBUG] File path: {filepath}")
+        print(f"[NOTE] Future: This file will be uploaded to AWS S3")
+        
+        flash('✅ File uploaded successfully! S3 integration coming soon.', 'success')
+        return redirect(url_for('dashboard') + '?upload=success')
+    
+    except Exception as e:
+        print(f"[ERROR] File upload failed: {str(e)}")
+        flash(f'Upload failed: {str(e)}', 'error')
+        return redirect(url_for('dashboard') + '?upload=failed')
 
 
 # ============================================================================

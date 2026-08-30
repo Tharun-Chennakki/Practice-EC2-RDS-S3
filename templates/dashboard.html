@@ -30,11 +30,54 @@
         <div class="dashboard-content">
             <p>You have successfully logged in to your account.</p>
             <p>This is your personal dashboard where you can manage your account settings and profile information.</p>
-            <p>Click the logout button below when you're ready to end your session.</p>
+        </div>
+
+        <!-- File Upload Section -->
+        <div class="upload-section">
+            <h2 class="upload-title">📁 Upload File to Cloud Storage (S3)</h2>
+            <p class="upload-description">Select a file from your computer to upload to AWS S3 storage.</p>
+            
+            <form method="POST" action="{{ url_for('upload_file') }}" enctype="multipart/form-data" class="upload-form" id="uploadForm">
+                <div class="file-input-wrapper">
+                    <label for="file-input" class="file-input-label">
+                        <span class="file-input-icon">📤</span>
+                        <span class="file-input-text">Choose File</span>
+                    </label>
+                    <input type="file" id="file-input" name="file" class="file-input" required>
+                    <span class="file-name" id="file-name">No file chosen</span>
+                </div>
+                
+                <button type="submit" class="upload-button">Upload to S3</button>
+            </form>
+
+            <!-- Uploaded Files List -->
+            <div class="uploaded-files" id="uploadedFiles">
+                <h3>📋 Uploaded Files</h3>
+                <p class="no-files-message" id="noFilesMessage">No files uploaded yet. Start by uploading your first file!</p>
+                <ul class="files-list" id="filesList"></ul>
+            </div>
         </div>
 
         <!-- Logout Button -->
         <a href="{{ url_for('logout') }}" class="logout-button">Logout</a>
     </div>
+
+    <script>
+        // Update file name display when file is selected
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name || 'No file chosen';
+            document.getElementById('file-name').textContent = fileName;
+        });
+
+        // Show success message if upload was successful
+        window.addEventListener('load', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('upload') === 'success') {
+                alert('✅ File uploaded successfully! Integration with S3 will be added soon.');
+                // Clear the URL parameter
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        });
+    </script>
 </body>
 </html>

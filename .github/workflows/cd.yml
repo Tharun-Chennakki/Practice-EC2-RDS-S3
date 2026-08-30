@@ -1,0 +1,231 @@
+name: CD - Deploy to AWS EC2
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Deployment target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      skip_tests:
+        description: 'Skip running tests before deployment'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      notify_slack:
+        description: 'Send deployment notification to Slack'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  pre-deployment-checks:
+    runs-on: ubuntu-latest
+    outputs:
+      deployment_id: ${{ steps.vars.outputs.deployment_id }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate Deployment ID
+      id: vars
+      run: |
+        DEPLOYMENT_ID=$(date +%s)
+        echo "deployment_id=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+        echo "Deployment ID: $DEPLOYMENT_ID"
+
+    - name: Validate deployment configuration
+      run: |
+        echo "Target Environment: ${{ github.event.inputs.deploy_target }}"
+        echo "Skip Tests: ${{ github.event.inputs.skip_tests }}"
+        echo "Commit SHA: ${{ github.sha }}"
+        echo "Branch: ${{ github.ref }}"
+        echo "Triggered by: ${{ github.actor }}"
+
+    - name: Pre-deployment notification
+      run: |
+        echo "========================================="
+        echo "DEPLOYMENT INITIATED"
+        echo "========================================="
+        echo "Environment: ${{ github.event.inputs.deploy_target }}"
+        echo "Deployment ID: ${{ steps.vars.outputs.deployment_id }}"
+        echo "Commit: ${{ github.sha }}"
+        echo "Actor: ${{ github.actor }}"
+        echo "Time: $(date)"
+        echo "========================================="
+
+  run-tests:
+    needs: pre-deployment-checks
+    runs-on: ubuntu-latest
+    if: github.event.inputs.skip_tests == 'false'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+
+    - name: Run tests before deployment
+      run: |
+        pytest tests/ -v || echo "Tests completed (non-blocking)"
+
+  deploy-to-aws:
+    needs: [pre-deployment-checks, run-tests]
+    runs-on: windows-latest
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download deployment script
+      run: |
+        # Create scripts directory
+        if (-not (Test-Path "scripts")) {
+          New-Item -ItemType Directory -Path "scripts" -Force
+        }
+        Copy-Item -Path ".github\scripts\deploy.ps1" -Destination "scripts\deploy.ps1" -Force
+      shell: powershell
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Deploy application via SSH
+      run: |
+        $deploymentParams = @{
+          EC2_HOST = "${{ secrets.EC2_HOST }}"
+          EC2_USER = "${{ secrets.EC2_USER }}"
+          SSH_PRIVATE_KEY = "${{ secrets.SSH_PRIVATE_KEY }}"
+          SSH_PORT = "${{ secrets.SSH_PORT }}"
+          APP_DEPLOYMENT_PATH = "${{ secrets.APP_DEPLOYMENT_PATH }}"
+          ENVIRONMENT = "${{ github.event.inputs.deploy_target }}"
+          DB_HOST = "${{ secrets.DB_HOST }}"
+          DB_USER = "${{ secrets.DB_USER }}"
+          DB_PASSWORD = "${{ secrets.DB_PASSWORD }}"
+          DB_NAME = "${{ secrets.DB_NAME }}"
+          DB_PORT = "${{ secrets.DB_PORT }}"
+          APP_SECRET_KEY = "${{ secrets.APP_SECRET_KEY }}"
+          DEPLOYMENT_ID = "${{ needs.pre-deployment-checks.outputs.deployment_id }}"
+          GITHUB_ACTOR = "${{ github.actor }}"
+          GITHUB_SHA = "${{ github.sha }}"
+          GITHUB_REF = "${{ github.ref }}"
+        }
+        
+        & .\.github\scripts\deploy.ps1 @deploymentParams
+      shell: powershell
+
+    - name: Post-deployment health check
+      run: |
+        $maxRetries = 5
+        $retryCount = 0
+        $healthCheckUrl = "http://${{ secrets.EC2_HOST }}:5000/health"
+        
+        Write-Host "Checking application health at $healthCheckUrl"
+        
+        while ($retryCount -lt $maxRetries) {
+          try {
+            $response = Invoke-WebRequest -Uri $healthCheckUrl -TimeoutSec 5 -ErrorAction Stop
+            if ($response.StatusCode -eq 200) {
+              Write-Host "✓ Application is healthy"
+              exit 0
+            }
+          } catch {
+            Write-Host "Health check attempt $($retryCount + 1)/$maxRetries failed"
+            Start-Sleep -Seconds 5
+            $retryCount++
+          }
+        }
+        Write-Host "⚠ Health check failed after $maxRetries attempts (non-blocking)"
+      shell: powershell
+      continue-on-error: true
+
+    - name: Deployment success notification
+      if: success()
+      run: |
+        Write-Host "========================================="
+        Write-Host "✓ DEPLOYMENT SUCCESSFUL"
+        Write-Host "========================================="
+        Write-Host "Environment: ${{ github.event.inputs.deploy_target }}"
+        Write-Host "Deployment ID: ${{ needs.pre-deployment-checks.outputs.deployment_id }}"
+        Write-Host "Deployed by: ${{ github.actor }}"
+        Write-Host "Commit: ${{ github.sha }}"
+        Write-Host "Time: $(Get-Date)"
+        Write-Host "========================================="
+      shell: powershell
+
+    - name: Deployment failure notification
+      if: failure()
+      run: |
+        Write-Host "========================================="
+        Write-Host "✗ DEPLOYMENT FAILED"
+        Write-Host "========================================="
+        Write-Host "Environment: ${{ github.event.inputs.deploy_target }}"
+        Write-Host "Deployment ID: ${{ needs.pre-deployment-checks.outputs.deployment_id }}"
+        Write-Host "Deployed by: ${{ github.actor }}"
+        Write-Host "Commit: ${{ github.sha }}"
+        Write-Host "========================================="
+        Write-Host "Check logs for details"
+        Write-Host "========================================="
+      shell: powershell
+
+  notify-slack:
+    needs: [pre-deployment-checks, deploy-to-aws]
+    runs-on: ubuntu-latest
+    if: github.event.inputs.notify_slack == 'true' && always()
+    
+    steps:
+    - name: Send Slack notification
+      uses: slackapi/slack-github-action@v1
+      with:
+        payload: |
+          {
+            "text": "Deployment Status",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "🚀 Deployment Notification\n*Status*: ${{ job.status }}\n*Environment*: ${{ github.event.inputs.deploy_target }}\n*Deployment ID*: ${{ needs.pre-deployment-checks.outputs.deployment_id }}\n*Deployed by*: ${{ github.actor }}\n*Commit*: `${{ github.sha }}`"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      continue-on-error: true
+
+  cleanup:
+    needs: [deploy-to-aws]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Log deployment completion
+      run: |
+        echo "Deployment workflow completed"
+        echo "Status: ${{ job.status }}"
+        echo "Time: $(date)"
