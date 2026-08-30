@@ -8,8 +8,6 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 import pymysql
-import boto3
-from botocore.exceptions import ClientError
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flask import (
@@ -20,7 +18,6 @@ from flask import (
     url_for,
     session,
     flash,
-    jsonify,
 )
 
 # Load environment variables from .env file
@@ -88,7 +85,7 @@ DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 # Debug: Verify credentials are loaded
-print(f"[DEBUG] Database Configuration Loaded:")
+print("[DEBUG] Database Configuration Loaded:")
 print(f"  DB_HOST: {DB_HOST}")
 print(f"  DB_PORT: {DB_PORT}")
 print(f"  DB_NAME: {DB_NAME}")
@@ -424,7 +421,7 @@ def upload_file():
         print(f"[DEBUG] File uploaded successfully: {unique_filename}")
         print(f"[DEBUG] File size: {os.path.getsize(filepath)} bytes")
         print(f"[DEBUG] File path: {filepath}")
-        print(f"[NOTE] Future: This file will be uploaded to AWS S3")
+        print("[NOTE] Future: This file will be uploaded to AWS S3")
 
         flash("✅ File uploaded successfully! S3 integration coming soon.", "success")
         return redirect(url_for("dashboard") + "?upload=success")
@@ -507,10 +504,10 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("🚀 Flask Web Application Starting...")
     print("=" * 70)
-    print(f"📍 Application URL: http://localhost:5000")
-    print(f"📍 Port Number: 5000")
-    print(f"📍 Register Page: http://localhost:5000/register")
-    print(f"📍 Login Page: http://localhost:5000/login")
+    print("📍 Application URL: http://localhost:5000")
+    print("📍 Port Number: 5000")
+    print("📍 Register Page: http://localhost:5000/register")
+    print("📍 Login Page: http://localhost:5000/login")
     print("=" * 70 + "\n")
 
     # Get debug mode from environment (default: False for production)

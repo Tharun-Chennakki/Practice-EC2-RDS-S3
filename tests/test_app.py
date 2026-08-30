@@ -2,12 +2,19 @@
 Basic test suite for Flask application
 """
 
-import pytest
-import sys
 import os
+import sys
+
+import pytest
 
 # Add parent directory to path to import app
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def expect(condition, message):
+    """Small helper to avoid Bandit's assert_used warning in tests."""
+    if not condition:
+        raise AssertionError(message)
 
 
 class TestAppStructure:
@@ -15,21 +22,21 @@ class TestAppStructure:
 
     def test_app_file_exists(self):
         """Test that app.py exists"""
-        assert os.path.exists("app.py")
+        expect(os.path.exists("app.py"), "app.py file not found")
 
     def test_requirements_file_exists(self):
         """Test that requirements.txt exists"""
-        assert os.path.exists("requirements.txt")
+        expect(os.path.exists("requirements.txt"), "requirements.txt file not found")
 
     def test_templates_exist(self):
         """Test that required templates exist"""
         templates = ["login.html", "register.html", "dashboard.html"]
         for template in templates:
-            assert os.path.exists(f"templates/{template}")
+            expect(os.path.exists(f"templates/{template}"), f"Template {template} not found")
 
     def test_static_css_exists(self):
         """Test that static CSS files exist"""
-        assert os.path.exists("static/css/style.css")
+        expect(os.path.exists("static/css/style.css"), "CSS file not found")
 
 
 class TestFlaskApp:
@@ -42,17 +49,17 @@ class TestFlaskApp:
         import werkzeug
         import dotenv
 
-        assert flask is not None
-        assert pymysql is not None
-        assert werkzeug is not None
-        assert dotenv is not None
+        expect(flask is not None, "flask import failed")
+        expect(pymysql is not None, "pymysql import failed")
+        expect(werkzeug is not None, "werkzeug import failed")
+        expect(dotenv is not None, "dotenv import failed")
 
     def test_app_initialization(self):
         """Test that Flask app can be instantiated"""
         from flask import Flask
 
         app = Flask(__name__)
-        assert app is not None
+        expect(app is not None, "Flask app could not be created")
 
 
 class TestRequirements:
@@ -62,19 +69,19 @@ class TestRequirements:
         """Test Flask is installed"""
         with open("requirements.txt", "r") as f:
             content = f.read()
-            assert "Flask" in content
+            expect("Flask" in content, "Flask not in requirements.txt")
 
     def test_pymysql_version(self):
         """Test PyMySQL is installed"""
         with open("requirements.txt", "r") as f:
             content = f.read()
-            assert "PyMySQL" in content
+            expect("PyMySQL" in content, "PyMySQL not in requirements.txt")
 
     def test_werkzeug_version(self):
         """Test Werkzeug is installed"""
         with open("requirements.txt", "r") as f:
             content = f.read()
-            assert "Werkzeug" in content
+            expect("Werkzeug" in content, "Werkzeug not in requirements.txt")
 
 
 if __name__ == "__main__":
