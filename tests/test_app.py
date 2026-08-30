@@ -32,7 +32,10 @@ class TestAppStructure:
         """Test that required templates exist"""
         templates = ["login.html", "register.html", "dashboard.html"]
         for template in templates:
-            expect(os.path.exists(f"templates/{template}"), f"Template {template} not found")
+            expect(
+                os.path.exists(f"templates/{template}"),
+                f"Template {template} not found",
+            )
 
     def test_static_css_exists(self):
         """Test that static CSS files exist"""
