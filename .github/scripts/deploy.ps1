@@ -83,86 +83,75 @@ Log-Success "SSH key configured"
 # ============================================================================
 Log-Info "Preparing remote deployment script..."
 
-$remoteScript = @"
+$remoteScript = @'
 #!/bin/bash
 set -e
 
-export DEPLOYMENT_ID="$DEPLOYMENT_ID"
-export ENVIRONMENT="$ENVIRONMENT"
-export GITHUB_ACTOR="$GITHUB_ACTOR"
-export GITHUB_SHA="$GITHUB_SHA"
-export GITHUB_REF="$GITHUB_REF"
+export DEPLOYMENT_ID="__DEPLOYMENT_ID__"
+export ENVIRONMENT="__ENVIRONMENT__"
+export GITHUB_ACTOR="__GITHUB_ACTOR__"
+export GITHUB_SHA="__GITHUB_SHA__"
+export GITHUB_REF="__GITHUB_REF__"
 
-# Colors
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 log_info() {
-  echo -e "\${BLUE}[INFO]\${NC} \$1"
+  echo -e "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-  echo -e "\${GREEN}[SUCCESS]\${NC} \$1"
+  echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_error() {
-  echo -e "\${RED}[ERROR]\${NC} \$1"
+  echo -e "${RED}[ERROR]${NC} $1"
 }
 
 log_warning() {
-  echo -e "\${YELLOW}[WARNING]\${NC} \$1"
+  echo -e "${YELLOW}[WARNING]${NC} $1"
 }
-
-# ============================================================================
-# REMOTE DEPLOYMENT STEPS
-# ============================================================================
 
 log_info "========================================="
 log_info "Starting Deployment on EC2"
 log_info "========================================="
-log_info "Deployment ID: \$DEPLOYMENT_ID"
-log_info "Environment: \$ENVIRONMENT"
-log_info "Deployment started by: \$GITHUB_ACTOR"
-log_info "Commit SHA: \$GITHUB_SHA"
-log_info "Branch: \$GITHUB_REF"
+log_info "Deployment ID: ${DEPLOYMENT_ID}"
+log_info "Environment: ${ENVIRONMENT}"
+log_info "Deployment started by: ${GITHUB_ACTOR}"
+log_info "Commit SHA: ${GITHUB_SHA}"
+log_info "Branch: ${GITHUB_REF}"
 log_info "========================================="
 
-# Create deployment directory if it doesn't exist
 log_info "Creating deployment directory..."
-sudo mkdir -p "$APP_DEPLOYMENT_PATH"
-sudo chown \$USER:\$USER "$APP_DEPLOYMENT_PATH"
+sudo mkdir -p "__APP_DEPLOYMENT_PATH__"
+sudo chown "__EC2_USER__:__EC2_USER__" "__APP_DEPLOYMENT_PATH__"
 
-# Navigate to deployment directory
-cd "$APP_DEPLOYMENT_PATH"
+cd "__APP_DEPLOYMENT_PATH__"
 
-# Create backup directory
-BACKUP_DIR="backups/backup_\$(date +%Y%m%d_%H%M%S)"
-log_info "Creating backup: \$BACKUP_DIR"
-mkdir -p "\$BACKUP_DIR"
+BACKUP_DIR="backups/backup_$(date +%Y%m%d_%H%M%S)"
+log_info "Creating backup: ${BACKUP_DIR}"
+mkdir -p "${BACKUP_DIR}"
 
-# Backup current deployment (if it exists)
 if [ -f "app.py" ]; then
     log_info "Backing up current deployment..."
-    cp -r . "\$BACKUP_DIR/" 2>/dev/null || true
-    log_success "Backup created: \$BACKUP_DIR"
+    cp -r . "${BACKUP_DIR}/" 2>/dev/null || true
+    log_success "Backup created: ${BACKUP_DIR}"
 else
     log_warning "No existing deployment found (first deployment)"
 fi
 
-# Update application from GitHub
 log_info "Updating application code from GitHub..."
 if [ -d ".git" ]; then
     git fetch origin
-    git reset --hard origin/\${GITHUB_REF##*/}
+    git reset --hard "origin/${GITHUB_REF##*/}"
     git clean -fd
 else
     log_warning "Git repository not found, assuming fresh clone"
 fi
 
-# Install/Update Python dependencies
 log_info "Installing Python dependencies..."
 if [ ! -d "venv" ]; then
     python3 -m venv venv
@@ -170,32 +159,29 @@ fi
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
-
 log_success "Dependencies installed"
 
-# Create/Update .env file with database credentials
 log_info "Configuring environment variables..."
 cat > .env << 'ENVEOF'
-DB_HOST=$DB_HOST
-DB_PORT=$DB_PORT
-DB_NAME=$DB_NAME
-DB_USER=$DB_USER
-DB_PASSWORD=$DB_PASSWORD
-FLASK_ENV=$ENVIRONMENT
+DB_HOST=__DB_HOST__
+DB_PORT=__DB_PORT__
+DB_NAME=__DB_NAME__
+DB_USER=__DB_USER__
+DB_PASSWORD=__DB_PASSWORD__
+FLASK_ENV=__ENVIRONMENT__
 FLASK_APP=app.py
-FLASK_SECRET_KEY=$APP_SECRET_KEY
+FLASK_SECRET_KEY=__APP_SECRET_KEY__
 FLASK_DEBUG=False
 FLASK_HOST=0.0.0.0
 FLASK_PORT=5000
-DEPLOYMENT_ID=$DEPLOYMENT_ID
+DEPLOYMENT_ID=__DEPLOYMENT_ID__
 DEPLOYMENT_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-DEPLOYMENT_ACTOR=$GITHUB_ACTOR
-DEPLOYMENT_COMMIT=$GITHUB_SHA
+DEPLOYMENT_ACTOR=__GITHUB_ACTOR__
+DEPLOYMENT_COMMIT=__GITHUB_SHA__
 ENVEOF
 
 log_success "Environment variables configured"
 
-# Create systemd service file for the Flask app
 log_info "Configuring systemd service..."
 sudo tee /etc/systemd/system/flask-app.service > /dev/null << 'SERVICEEOF'
 [Unit]
@@ -205,10 +191,10 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-User=$EC2_USER
-WorkingDirectory=$APP_DEPLOYMENT_PATH
-Environment="PATH=$APP_DEPLOYMENT_PATH/venv/bin"
-ExecStart=$APP_DEPLOYMENT_PATH/venv/bin/python app.py
+User=__EC2_USER__
+WorkingDirectory=__APP_DEPLOYMENT_PATH__
+Environment="PATH=__APP_DEPLOYMENT_PATH__/venv/bin"
+ExecStart=__APP_DEPLOYMENT_PATH__/venv/bin/python app.py
 Restart=always
 RestartSec=10
 StandardOutput=append:/var/log/flask-app/app.log
@@ -218,12 +204,10 @@ StandardError=append:/var/log/flask-app/error.log
 WantedBy=multi-user.target
 SERVICEEOF
 
-# Create log directory
 log_info "Creating log directory..."
 sudo mkdir -p /var/log/flask-app
-sudo chown \$USER:\$USER /var/log/flask-app
+sudo chown "__EC2_USER__:__EC2_USER__" /var/log/flask-app
 
-# Reload systemd daemon and restart service
 log_info "Restarting Flask application..."
 sudo systemctl daemon-reload
 sudo systemctl enable flask-app.service
@@ -231,11 +215,9 @@ sudo systemctl restart flask-app.service
 
 log_success "Flask application restarted"
 
-# Wait for service to be ready
 log_info "Waiting for application to start..."
 sleep 5
 
-# Check if service is running
 if systemctl is-active --quiet flask-app.service; then
     log_success "Flask application is running"
 else
@@ -244,21 +226,34 @@ else
     exit 1
 fi
 
-# Display deployment summary
 log_info "========================================="
 log_success "DEPLOYMENT COMPLETED SUCCESSFULLY"
 log_info "========================================="
-log_info "Environment: \$ENVIRONMENT"
-log_info "Application Path: $APP_DEPLOYMENT_PATH"
-log_info "Deployment ID: \$DEPLOYMENT_ID"
-log_info "Deployed by: \$GITHUB_ACTOR"
-log_info "Commit: \$GITHUB_SHA"
+log_info "Environment: ${ENVIRONMENT}"
+log_info "Application Path: __APP_DEPLOYMENT_PATH__"
+log_info "Deployment ID: ${DEPLOYMENT_ID}"
+log_info "Deployed by: ${GITHUB_ACTOR}"
+log_info "Commit: ${GITHUB_SHA}"
 log_info "========================================="
 log_info "Application logs: journalctl -u flask-app.service -f"
 log_info "Application status: systemctl status flask-app.service"
 log_info "View recent logs: tail -f /var/log/flask-app/app.log"
 log_info "========================================="
-"@
+'@
+
+$remoteScript = $remoteScript.Replace('__DEPLOYMENT_ID__', $DEPLOYMENT_ID)
+$remoteScript = $remoteScript.Replace('__ENVIRONMENT__', $ENVIRONMENT)
+$remoteScript = $remoteScript.Replace('__GITHUB_ACTOR__', $GITHUB_ACTOR)
+$remoteScript = $remoteScript.Replace('__GITHUB_SHA__', $GITHUB_SHA)
+$remoteScript = $remoteScript.Replace('__GITHUB_REF__', $GITHUB_REF)
+$remoteScript = $remoteScript.Replace('__APP_DEPLOYMENT_PATH__', $APP_DEPLOYMENT_PATH)
+$remoteScript = $remoteScript.Replace('__EC2_USER__', $EC2_USER)
+$remoteScript = $remoteScript.Replace('__DB_HOST__', $DB_HOST)
+$remoteScript = $remoteScript.Replace('__DB_PORT__', $DB_PORT)
+$remoteScript = $remoteScript.Replace('__DB_NAME__', $DB_NAME)
+$remoteScript = $remoteScript.Replace('__DB_USER__', $DB_USER)
+$remoteScript = $remoteScript.Replace('__DB_PASSWORD__', $DB_PASSWORD)
+$remoteScript = $remoteScript.Replace('__APP_SECRET_KEY__', $APP_SECRET_KEY)
 
 # Save script to temporary file
 $scriptPath = "$env:TEMP\remote_deploy_$DEPLOYMENT_ID.sh"

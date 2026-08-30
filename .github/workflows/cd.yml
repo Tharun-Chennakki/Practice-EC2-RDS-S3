@@ -65,32 +65,8 @@ jobs:
         echo "Time: $(date)"
         echo "========================================="
 
-  run-tests:
-    needs: pre-deployment-checks
-    runs-on: ubuntu-latest
-    if: github.event.inputs.skip_tests == 'false'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov
-
-    - name: Run tests before deployment
-      run: |
-        pytest tests/ -v || echo "Tests completed (non-blocking)"
-
   deploy-to-aws:
-    needs: [pre-deployment-checks, run-tests]
+    needs: [pre-deployment-checks]
     runs-on: windows-latest
     if: always()
     

@@ -42,17 +42,14 @@ jobs:
           pip install pytest pytest-cov flake8 black bandit
 
       - name: Run code formatting check (black)
-        continue-on-error: true
         run: black --check .
 
       - name: Run linting (flake8)
-        continue-on-error: true
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: Run security checks (bandit)
-        continue-on-error: true
         run: bandit -r . -f txt
 
       - name: Run unit tests
