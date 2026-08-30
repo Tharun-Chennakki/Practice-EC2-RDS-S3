@@ -415,6 +415,41 @@ def logout():
 
 
 # ============================================================================
+# HEALTH CHECK ROUTE (For CI/CD Deployment Verification)
+# ============================================================================
+@app.route('/health', methods=['GET'])
+def health():
+    """
+    Health check endpoint for deployment verification.
+    Used by CI/CD pipeline to verify application is running.
+    
+    Returns:
+        JSON with application status and database connectivity.
+    """
+    health_status = {
+        'status': 'healthy',
+        'application': 'Flask Web Application',
+        'version': '1.0.0',
+        'timestamp': datetime.now().isoformat(),
+        'database': 'unknown'
+    }
+    
+    try:
+        # Try to connect to database
+        connection = get_db_connection_with_db()
+        cursor = connection.cursor()
+        cursor.execute("SELECT 1")
+        cursor.close()
+        connection.close()
+        health_status['database'] = 'connected'
+    except Exception as e:
+        health_status['database'] = f'disconnected - {str(e)}'
+        health_status['status'] = 'degraded'
+    
+    return health_status, 200
+
+
+# ============================================================================
 # APPLICATION STARTUP
 # ============================================================================
 if __name__ == '__main__':
