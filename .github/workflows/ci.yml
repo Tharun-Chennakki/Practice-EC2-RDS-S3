@@ -6,105 +6,76 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    # Single Python version for faster CI
     strategy:
+      fail-fast: false
       matrix:
         python-version: ['3.11']
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov flake8 black bandit
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov flake8 black bandit
 
-    - name: Run code formatting check (black)
-      run: |
-        black --check . || echo "Note: Code formatting issues found (non-blocking)"
-      continue-on-error: true
+      - name: Run code formatting check (black)
+        continue-on-error: true
+        run: black --check .
 
-    - name: Run linting (flake8)
-      run: |
-        # Stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      continue-on-error: true
+      - name: Run linting (flake8)
+        continue-on-error: true
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-    - name: Run security checks (bandit)
-      run: |
-        bandit -r . -f json -o bandit-report.json || true
-        bandit -r . -f txt || true
-      continue-on-error: true
+      - name: Run security checks (bandit)
+        continue-on-error: true
+        run: bandit -r . -f txt
 
-    - name: Run unit tests
-      run: |
-        pytest tests/ -v --cov=. --cov-report=xml --cov-report=html || true
+      - name: Run unit tests
+        run: pytest tests/ -v --cov=. --cov-report=xml --cov-report=html
 
-    - name: Upload coverage reports
-      uses: codecov/codecov-action@v3
-      with:
-        files: ./coverage.xml
-        fail_ci_if_error: false
-      continue-on-error: true
+      - name: Validate Flask app loads
+        run: python -c "import app; print('Flask app loads successfully')"
 
-    - name: Check requirements.txt for known vulnerabilities
-      run: |
-        pip install safety
-        safety check --json || true
-      continue-on-error: true
+      - name: Upload coverage reports
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+        continue-on-error: true
 
-    - name: Validate environment configuration
-      run: python -c "import app; print('✓ Flask app loads successfully')"
-      continue-on-error: true
-
-    - name: CI Summary
-      run: |
-        echo "========================================="
-        echo "✅ CI PIPELINE COMPLETED"
-        echo "========================================="
-        echo "Python version: ${{ matrix.python-version }}"
-        echo "Dependencies: ✓ Installed"
-        echo "Code checks: ✓ Completed"
-        echo "Security scan: ✓ Completed"
-        echo "Tests: ✓ Completed"
-        echo "========================================="
-        echo "Next: Manually trigger CD deployment in GitHub Actions"
-        echo "========================================="
-        echo "CI passed successfully!"
-        echo "Auto-triggering CD workflow for main branch deployment..."
-
-    - name: Dispatch CD Workflow
-      uses: actions/github-script@v7
-      with:
-        script: |
-          github.rest.actions.createWorkflowDispatch({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            workflow_id: 'cd.yml',
-            ref: 'main',
-            inputs: {
-              deploy_target: 'production',
-              skip_tests: 'false'
-            }
-          })
-      continue-on-error: true
+      - name: CI Summary
+        run: |
+          echo "========================================="
+          echo "✅ CI PIPELINE COMPLETED"
+          echo "========================================="
+          echo "Python version: ${{ matrix.python-version }}"
+          echo "Dependencies: ✓ Installed"
+          echo "Tests: ✓ Completed"
+          echo "========================================="
+          echo "Deployment is manual-only; use the CD workflow button in GitHub Actions."
+          echo "========================================="
