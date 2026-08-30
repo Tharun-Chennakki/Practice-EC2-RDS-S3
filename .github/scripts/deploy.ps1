@@ -265,15 +265,7 @@ Log-Info "Remote script prepared: $scriptPath"
 # ============================================================================
 Log-Info "Uploading deployment script to EC2..."
 try {
-    $scpArgs = @(
-        "-i", $sshKeyPath,
-        "-P", $SSH_PORT,
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "UserKnownHostsFile=/dev/null",
-        $scriptPath,
-        "${EC2_USER}@${EC2_HOST}:/tmp/deploy_${DEPLOYMENT_ID}.sh"
-    )
-    & scp @scpArgs 2>&1
+    & scp -i $sshKeyPath -P $SSH_PORT -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" "$scriptPath" "${EC2_USER}@${EC2_HOST}:/tmp/deploy_${DEPLOYMENT_ID}.sh" 2>&1
     
     if ($LASTEXITCODE -eq 0) {
         Log-Success "Deployment script uploaded"
@@ -293,16 +285,7 @@ Log-Info "Executing deployment on EC2..."
 Log-Info "Connecting to: ${EC2_USER}@${EC2_HOST}:${SSH_PORT}"
 
 try {
-    $sshArgs = @(
-        "-i", $sshKeyPath,
-        "-p", $SSH_PORT,
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "UserKnownHostsFile=/dev/null",
-        "-o", "ConnectTimeout=30",
-        "${EC2_USER}@${EC2_HOST}",
-        "bash /tmp/deploy_${DEPLOYMENT_ID}.sh"
-    )
-    & ssh @sshArgs 2>&1
+    & ssh -i $sshKeyPath -p $SSH_PORT -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" -o "ConnectTimeout=30" "${EC2_USER}@${EC2_HOST}" "bash /tmp/deploy_${DEPLOYMENT_ID}.sh" 2>&1
     
     if ($LASTEXITCODE -eq 0) {
         Log-Success "Remote deployment executed successfully"
